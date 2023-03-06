@@ -11,6 +11,9 @@ Install the latest version with `pip install levi`.
 The `delta_file_stats` function provides information on the number of bytes in files of a Delta table.  Example usage:
 
 ```python
+import levi
+from deltalake import DeltaTable
+
 dt = DeltaTable("some_folder/some_table")
 levi.delta_file_sizes(dt)
 
