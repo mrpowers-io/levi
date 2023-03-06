@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "levi"
+version = "0.1.0"
+description = "Delta Lake helper methods"
+authors = ["Matthew Powers <matthewkevinpowers@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+deltalake = "0.7.0"
+
+
+[tool.poetry.dev-dependencies]
+beavis = "0.3.0"
+pytest = "7.2.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
