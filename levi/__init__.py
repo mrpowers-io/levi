@@ -1,7 +1,12 @@
 import re
+from deltalake import DeltaTable
 
 
-def delta_file_sizes(delta_table, boundaries=None):
+def latest_version(delta_table: DeltaTable):
+    return delta_table.version()
+
+
+def delta_file_sizes(delta_table: DeltaTable, boundaries=None):
     if boundaries is None:
         boundaries = ["<1mb", "1mb-500mb", "500mb-1gb", "1gb-2gb", ">2gb"]
     df = delta_table.get_add_actions(flatten=True).to_pandas()
