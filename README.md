@@ -34,3 +34,19 @@ You can also specify the boundaries when you invoke the function to get a custom
 ```python
 levi.delta_file_sizes(dt, ["<1mb", "1mb-200mb", "200mb-800mb", "800mb-2gb", ">2gb"])
 ```
+
+## Get Latest Delta Table Version
+
+The `latest_version` function gets the most current Delta Table version number and returns it.
+
+```python
+import levi
+from deltalake import DeltaTable
+
+dt = DeltaTable("some_folder/some_table")
+levi.latest_version(dt)
+
+# return value
+2
+```
+

@@ -1,12 +1,21 @@
 import levi
 from deltalake import DeltaTable
 
+
 def test_delta_file_sizes():
     dt = DeltaTable("./tests/reader_tests/generated/basic_append/delta")
     print(levi.delta_file_sizes(dt))
     res = levi.delta_file_sizes(dt, ["<300b", "300b-1kb", "1kb-100kb", ">100kb"])
     expected = {'num_files_<300b': 0, 'num_files_300b-1kb': 2, 'num_files_1kb-100kb': 0, 'num_files_>100kb': 0}
     assert res == expected
+
+
+def test_latest_version():
+    dt = DeltaTable("./tests/reader_tests/generated/multi_partitioned/delta")
+    res = levi.latest_version(dt)
+    expected = 2
+    assert res == expected
+
 
 def test_str_to_bytes():
     assert levi.str_to_bytes("100b") == 100
