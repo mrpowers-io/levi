@@ -35,6 +35,28 @@ You can also specify the boundaries when you invoke the function to get a custom
 levi.delta_file_sizes(dt, ["<1mb", "1mb-200mb", "200mb-800mb", "800mb-2gb", ">2gb"])
 ```
 
+## Skipped stats
+
+Provides information on the number of files and number of bytes that are skipped for a given set of predicates.
+
+```python
+import levi
+
+dt = DeltaTable("some_folder/some_table")
+levi.skipped_stats(dt, filters=[('a_float', '=', 4.5)])
+
+# return value
+{
+    'num_files': 2,
+    'num_files_skipped': 1,
+    'num_bytes_skipped': 996
+}
+```
+
+This predicate will skip one file and 996 bytes of data.
+
+You can use `skipped_stats` to figure out the percentage of files that get skipped.  You can also use this information to see if you should Z ORDER your data or otherwise rearrange it to allow for better file skipping. 
+
 ## Get Latest Delta Table Version
 
 The `latest_version` function gets the most current Delta Table version number and returns it.

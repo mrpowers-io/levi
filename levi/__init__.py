@@ -2,6 +2,43 @@ import re
 from deltalake import DeltaTable
 
 
+def skipped_stats(delta_table, filters):
+    df = delta_table.get_add_actions(flatten=True).to_pandas()
+    total_files = len(df)
+    total_bytes = df["size_bytes"].sum()
+    res = df.query(filters_to_sql(filters))
+    num_files_skipped = total_files - len(res)
+    num_bytes_skipped = total_bytes - res["size_bytes"].sum()
+    return {
+        "num_files": total_files,
+        "num_files_skipped": num_files_skipped,
+        "num_bytes_skipped": num_bytes_skipped
+    }
+
+
+def filters_to_sql(filters):
+    res = []
+    for filter in filters:
+        res.append(filter_to_sql(filter))
+    return " and ".join(res)
+
+
+def filter_to_sql(filter):
+    col, operator, val = filter
+    if operator == "=":
+        return f"(`min.{col}` <= {val} and `max.{col}` >= {val})"
+    elif operator == "<":
+        return f"(`max.{col}` > {val})"
+    elif operator == "<=":
+        return f"(`max.{col}` >= {val})"
+    elif operator == ">":
+        return f"(`min.{col}` < {val})"
+    elif operator == ">=":
+        return f"(`min.{col}` <= {val})"
+    else:
+        raise ValueError(f"{filter} cannot be parsed.")
+
+
 def latest_version(delta_table: DeltaTable):
     return delta_table.version()
 
