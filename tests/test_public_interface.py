@@ -1,3 +1,5 @@
+import pytest
+
 import levi
 from deltalake import DeltaTable
 
@@ -19,12 +21,9 @@ def test_filters_to_sql():
     assert levi.filter_to_sql(("a_float", "=", 4.5)) == "(`min.a_float` <= 4.5 and `max.a_float` >= 4.5)"
 
 
-
 def test_filter_to_sql():
     assert levi.filter_to_sql(("a_float", "=", 4.5)) == "(`min.a_float` <= 4.5 and `max.a_float` >= 4.5)"
     assert levi.filter_to_sql(("a_float", ">", 3)) == "(`min.a_float` < 3)"
-
-
 
 
 def test_delta_file_sizes():
@@ -32,6 +31,22 @@ def test_delta_file_sizes():
     res = levi.delta_file_sizes(dt, ["<300b", "300b-1kb", "1kb-100kb", ">100kb"])
     expected = {'num_files_<300b': 0, 'num_files_300b-1kb': 2, 'num_files_1kb-100kb': 0, 'num_files_>100kb': 0}
     assert res == expected
+
+
+@pytest.mark.skip(reason="There is a bug in the .get_actions implementation of delta-rs")
+def test_get_all_columns_with_statistics():
+    dt = DeltaTable("./tests/reader_tests/generated/with_changing_number_of_stat_cols/delta")
+    columns = levi.get_all_columns_with_statistics(dt)
+    assert columns == ['col1', 'col2', 'col3']
+
+
+@pytest.mark.skip(reason="There is a bug in the .get_actions implementation of delta-rs")
+def test_get_files_without_statistics_for_column():
+    dt = DeltaTable("./tests/reader_tests/generated/with_changing_number_of_stat_cols/delta")
+    res_col1 = levi.get_files_without_statistics_for_column(dt, 'col1')
+    res_col2 = levi.get_files_without_statistics_for_column(dt, 'col2')
+    assert res_col1 == []
+    assert res_col2 == ['part-00000-1344c9ae-d450-49ca-aea9-ef32ad16fdf2-c000.snappy.parquet']
 
 
 def test_latest_version():
