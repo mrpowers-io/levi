@@ -1,4 +1,6 @@
 import re
+from typing import List
+
 from deltalake import DeltaTable
 
 
@@ -41,6 +43,28 @@ def filter_to_sql(filter):
 
 def latest_version(delta_table: DeltaTable):
     return delta_table.version()
+
+
+def get_all_columns_with_statistics(delta_table: DeltaTable) -> List[str]:
+    df = delta_table.get_add_actions(flatten=True).to_pandas()
+
+    columns_with_statistics = set()
+    for col in df:
+        if col.startswith("null_count."):
+            columns_with_statistics.add(col[11:])
+
+    return list(columns_with_statistics)
+
+
+def get_files_without_statistics_for_column(delta_table: DeltaTable, col: str) -> List[str]:
+    df = delta_table.get_add_actions(flatten=True).to_pandas()
+
+    files_without_statistics = []
+    for row in df.iterrows():
+        if f"null_count.{col}" not in row[1]:
+            files_without_statistics.append(row[1]["path"])
+
+    return files_without_statistics
 
 
 def delta_file_sizes(delta_table: DeltaTable, boundaries=None):
