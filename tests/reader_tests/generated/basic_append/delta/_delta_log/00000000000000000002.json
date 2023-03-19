@@ -1,0 +1,2 @@
+{"add":{"path":"2-cdfbf773-3bb8-4361-bae7-97cb0bbe12cc-0.parquet","size":2891,"partitionValues":{},"modificationTime":1679179968,"dataChange":true,"stats":"{\"numRecords\": 2, \"minValues\": {\"letter\": \"a\", \"number\": 6, \"a_float\": 2.3}, \"maxValues\": {\"letter\": \"f\", \"number\": 7, \"a_float\": 3.8}, \"nullCount\": {\"letter\": 0, \"number\": 0, \"a_float\": 0}}","tags":null}}
+{"commitInfo":{"clientVersion":"delta-rs.0.6.0","operation":"delta-rs.Write","operationParameters":{"mode":"Append","partitionBy":"[]"},"timestamp":1679179968857}}
