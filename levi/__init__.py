@@ -28,13 +28,13 @@ def filter_to_sql(filter):
     if operator == "=":
         return f"(`min.{col}` <= {val} and `max.{col}` >= {val})"
     elif operator == "<":
-        return f"(`max.{col}` > {val})"
-    elif operator == "<=":
-        return f"(`max.{col}` >= {val})"
-    elif operator == ">":
         return f"(`min.{col}` < {val})"
-    elif operator == ">=":
+    elif operator == "<=":
         return f"(`min.{col}` <= {val})"
+    elif operator == ">":
+        return f"(`max.{col}` > {val})"
+    elif operator == ">=":
+        return f"(`max.{col}` >= {val})"
     else:
         raise ValueError(f"{filter} cannot be parsed.")
 
