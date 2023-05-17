@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "levi"
-version = "0.1.0"
+version = "0.2.0"
 description = "Delta Lake helper methods"
 authors = ["Matthew Powers <matthewkevinpowers@gmail.com>"]
 readme = "README.md"
