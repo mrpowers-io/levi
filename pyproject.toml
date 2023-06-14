@@ -1,13 +1,13 @@
 [tool.poetry]
 name = "levi"
-version = "0.2.0"
+version = "0.3.0"
 description = "Delta Lake helper methods"
 authors = ["Matthew Powers <matthewkevinpowers@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-deltalake = { version = "^0.9.0", extras = ["pandas"] }
+deltalake = { version = "^0.9", extras = ["pandas"] }
 
 
 [tool.poetry.dev-dependencies]
