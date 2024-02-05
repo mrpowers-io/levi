@@ -2,6 +2,7 @@ import re
 from typing import Optional
 from deltalake import DeltaTable
 import datetime
+import numpy as np
 
 
 def skipped_stats(delta_table, filters):
@@ -101,10 +102,10 @@ def boundary_parser(boundary):
 
 def updated_partitions(delta_table: DeltaTable, start_time: Optional[datetime.datetime] = None, end_time: Optional[datetime.datetime] = None) -> dict[str, str]:
     add_actions_df = delta_table.get_add_actions().to_pandas()
-    
+
     if start_time is not None:
-        add_actions_df = add_actions_df[add_actions_df["modification_time"] >= start_time]
+        add_actions_df = add_actions_df[add_actions_df["modification_time"] >= np.datetime64(int(start_time.timestamp() * 1e6), "us")]
     if end_time is not None:
-        add_actions_df = add_actions_df[add_actions_df["modification_time"] < end_time]
+        add_actions_df = add_actions_df[add_actions_df["modification_time"] < np.datetime64(int(end_time.timestamp() * 1e6), "us")]
 
     return add_actions_df.drop_duplicates(subset=["partition_values"])["partition_values"].tolist()
