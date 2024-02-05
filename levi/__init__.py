@@ -1,5 +1,7 @@
 import re
+from typing import Optional
 from deltalake import DeltaTable
+import datetime
 
 
 def skipped_stats(delta_table, filters):
@@ -96,3 +98,13 @@ def boundary_parser(boundary):
     else:
         raise ValueError(
             f"{boundary} cannot be parsed.  Valid prefixes are <, <=, >, and >=.  Two values can be delimited with a dash.  Valid examples include <10kb and 10kb-5gb.")
+
+def updated_partitions(delta_table: DeltaTable, start_time: Optional[datetime.datetime], end_time: Optional[datetime.datetime]) -> dict[str, str]:
+    add_actions_df = delta_table.get_add_actions().to_pandas()
+    
+    if start_time is not None:
+        add_actions_df = add_actions_df[add_actions_df["modification_time"] >= start_time]
+    if end_time is not None:
+        add_actions_df = add_actions_df[add_actions_df["modification_time"] < end_time]
+
+    return add_actions_df.drop_duplicates(subset=["partition_values"])["partition_values"].tolist()
