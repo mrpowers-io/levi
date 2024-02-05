@@ -1,5 +1,9 @@
+import datetime
+from pathlib import Path
 import levi
-from deltalake import DeltaTable
+from deltalake import DeltaTable, write_deltalake
+import pandas as pd
+import random
 
 
 def test_skipped_stats():
@@ -86,3 +90,64 @@ def test_boundary_parser():
     assert levi.boundary_parser(">=1kb") == (1000, ten_tb)
     assert levi.boundary_parser(">1kb") == (1001, ten_tb)
     assert levi.boundary_parser("10kb-4gb") == (10_000, 4_000_000_000)
+
+
+def test_updated_partitions_without_time_filter(tmp_path: Path):
+    table_location = tmp_path / "test_table"
+
+    df = pd.DataFrame(
+        {
+            "data": random.sample(range(0, 1000), 1000), 
+            "partition_1": [1] * 1000, 
+            "partition_2": ["a"] * 1000,
+        }
+    )
+
+    write_deltalake(table_location, df, mode="append", partition_by=["partition_1", "partition_2"])
+
+    df = pd.DataFrame(
+        {
+            "data": random.sample(range(0, 1000), 1000), 
+            "partition_1": [2] * 1000, 
+            "partition_2": ["b"] * 1000,
+        }
+    )
+
+    write_deltalake(table_location, df, mode="append", partition_by=["partition_1", "partition_2"])
+
+    delta_table = DeltaTable(table_location)
+
+    updated_partitions = levi.updated_partitions(delta_table)
+
+    assert updated_partitions == [{"partition_1": 1, "partition_2": "a"}, {"partition_1": 2, "partition_2": "b"}]
+
+def test_updated_partitions_with_time_filter(tmp_path: Path):
+    table_location = tmp_path / "test_table"
+
+    df = pd.DataFrame(
+        {
+            "data": random.sample(range(0, 1000), 1000), 
+            "partition_1": [1] * 1000, 
+            "partition_2": ["a"] * 1000,
+        }
+    )
+
+    start_time = datetime.datetime.now(datetime.timezone.utc)
+    write_deltalake(table_location, df, mode="append", partition_by=["partition_1", "partition_2"])
+
+    df = pd.DataFrame(
+        {
+            "data": random.sample(range(0, 1000), 1000), 
+            "partition_1": [2] * 1000, 
+            "partition_2": ["b"] * 1000,
+        }
+    )
+
+    end_time = datetime.datetime.now(datetime.timezone.utc)
+    write_deltalake(table_location, df, mode="append", partition_by=["partition_1", "partition_2"])
+
+    delta_table = DeltaTable(table_location)
+
+    updated_partitions = levi.updated_partitions(delta_table, start_time, end_time)
+
+    assert updated_partitions == [{"partition_1": 1, "partition_2": "a"}]
