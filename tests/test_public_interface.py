@@ -2,6 +2,7 @@ import datetime
 from pathlib import Path
 import levi
 from deltalake import DeltaTable, write_deltalake
+import pyarrow as pa
 import pandas as pd
 import random
 
@@ -151,3 +152,75 @@ def test_updated_partitions_with_time_filter(tmp_path: Path):
     updated_partitions = levi.updated_partitions(delta_table, start_time, end_time)
 
     assert updated_partitions == [{"partition_1": 1, "partition_2": "a"}]
+
+def test_type_2_scd_upsert_with_single_attribute(tmp_path: Path):
+    path = f"{tmp_path}/tmp/delta-upsert-single_attr"
+    
+    dt = datetime.datetime
+    
+    schema = pa.schema([
+        ('pkey', pa.int64()),
+        ('attr', pa.string()),
+        ('is_current', pa.bool_()),
+        ('effective_time', pa.timestamp('us')),
+        ('end_time', pa.timestamp('us')),                        
+
+    ])
+    data = pa.Table.from_pydict(
+        {
+            'pkey': [1, 2, 4],
+            'attr': ["A", "B", "D"],
+            'is_current': [True, True, True],
+            'effective_time': [datetime.datetime(2024,1,1), datetime.datetime(2024,1,1), datetime.datetime(2024,1,1)],
+            'end_time': [None, None, None]
+        },
+        schema=schema
+    )
+
+    write_deltalake(path, data)
+
+    updates_schema = pa.schema([
+        ('pkey', pa.int64()),
+        ('attr', pa.string()),
+        ('effective_time', pa.timestamp('us')),
+    ])
+    updates_data = pa.Table.from_pydict(
+        {
+            'pkey': [2, 3],
+            'attr': ["Z", "C"],
+            'effective_time': [datetime.datetime(2025,1,1), datetime.datetime(2025,9,15)],
+        },
+        schema=updates_schema
+    )
+
+    delta_table = DeltaTable(path)
+
+    levi.type_2_scd_upsert(
+        delta_table=delta_table,
+        updates_df=updates_data,
+        primary_key="pkey",
+        attr_col_names=["attr"],
+        is_current_col_name="is_current",
+        effective_time_col_name="effective_time",
+        end_time_col_name="end_time",
+    )
+
+    actual_table = DeltaTable(path).to_pyarrow_table()
+    expected_table = pa.Table.from_pydict(
+        {
+            'pkey': [2, 3, 2, 4, 1],
+            'attr': ["B", "C", "Z", "D", "A"],
+            'is_current': [False, True, True, True, True],
+            'effective_time': [dt(2024,1,1), dt(2025,9,15), dt(2025,1,1), dt(2024,1,1), dt(2024,1,1)],
+            'end_time': [dt(2025,1,1), None, None, None, None]
+        },
+        schema=schema
+    )
+
+    actual_table_sort_indices = pa.compute.sort_indices(actual_table, sort_keys=[("pkey", "ascending"), ("effective_time", "ascending")])
+    sorted_actual_table = actual_table.take(actual_table_sort_indices)
+
+    expected_table_sort_indices = pa.compute.sort_indices(expected_table, sort_keys=[("pkey", "ascending"), ("effective_time", "ascending")])
+    sorted_expected_table = expected_table.take(expected_table_sort_indices)
+
+    assert sorted_actual_table == sorted_expected_table
