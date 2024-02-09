@@ -217,8 +217,6 @@ def type_2_scd_upsert(
         ]
     )
 
-    # creates the predicate to only update when there is an update to one of attribute columns
-    when_matched_column_predicate = ' or '.join([f"source.{col} != target.{col}" for col in attr_col_names])
     (
         delta_table.merge(
             source=upsert_table,
@@ -238,6 +236,6 @@ def type_2_scd_upsert(
                 is_current_col_name: "false",
                 end_time_col_name: f"source.{effective_time_col_name}"
             },
-            predicate=f"{when_matched_column_predicate}"
+            predicate=' or '.join([f"source.{col} != target.{col}" for col in attr_col_names])
         ).execute()
     )
