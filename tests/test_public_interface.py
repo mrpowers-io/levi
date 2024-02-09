@@ -121,7 +121,7 @@ def test_updated_partitions_without_time_filter(tmp_path: Path):
 
     updated_partitions = levi.updated_partitions(delta_table)
 
-    assert updated_partitions == [{"partition_1": 1, "partition_2": "a"}, {"partition_1": 2, "partition_2": "b"}]
+    assert updated_partitions == [{"partition_1": 2, "partition_2": "b"}, {"partition_1": 1, "partition_2": "a"}]
 
 def test_updated_partitions_with_time_filter(tmp_path: Path):
     table_location = tmp_path / "test_table"
