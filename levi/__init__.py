@@ -147,7 +147,12 @@ def type_2_scd_upsert(
     :returns: <description>
     :rtype: None
     """
-    base_table = delta_table.to_pyarrow_table()
+    # only need to compare to current records
+    base_table = delta_table.to_pyarrow_table(
+        filters=[
+            (is_current_col_name,"=", True)
+        ]
+    )
 
     # validate the existing Delta table
     base_col_names = base_table.column_names
@@ -174,6 +179,7 @@ def type_2_scd_upsert(
 
     base_table = base_table.filter(pa.compute.field(is_current_col_name) == True)
 
+    # create not equal or filter expression search for new records
     for i, col in enumerate(attr_col_names):
         if i == 0:
             filter_expression = (pa.compute.field(col) != pa.compute.field(f"{col}_base"))
@@ -185,18 +191,21 @@ def type_2_scd_upsert(
         keys=primary_key,
         join_type='inner',
         right_suffix='_base'
-    )
-    
-    new_records_to_insert_table = new_records_to_insert_table.filter(
+    ).filter(
         filter_expression
     )
+
     merge_key_data_type = base_table.schema.field(primary_key).type 
 
+    # fill the merge_key column with nulls
     new_records_to_insert_table = new_records_to_insert_table.append_column(
         'merge_key', pa.array([None] * new_records_to_insert_table.num_rows, type=merge_key_data_type)
     )
+
+    # copy primary key into merge_key column for the updates table
     updates_table = updates_table.append_column('merge_key', updates_table[primary_key])
 
+    # select only the columns required - this drops the joined _base columns
     new_records_to_insert_table = new_records_to_insert_table.select(
         updates_table.column_names
     )
@@ -208,11 +217,12 @@ def type_2_scd_upsert(
         ]
     )
 
+    # creates the predicate to only update when there is an update to one of attribute columns
     when_matched_column_predicate = ' or '.join([f"source.{col} != target.{col}" for col in attr_col_names])
     (
         delta_table.merge(
             source=upsert_table,
-            predicate=f"target.{primary_key} = source.merge_key",
+            predicate=f"target.{primary_key} = source.merge_key and target.is_current",
             source_alias="source",
             target_alias="target"
         ).when_not_matched_insert(
@@ -223,20 +233,11 @@ def type_2_scd_upsert(
                 is_current_col_name: "true",
                 end_time_col_name: "null"
             },
-        #     predicate="merge_key is null"
-        # ).when_not_matched_insert(
-        #     updates={
-        #         **{col: f"source.{col}" for col in attr_col_names + effective_time_col_name},
-        #         is_current_col_name: "true",
-        #         end_time_col_name: "null"
-        #     },
-        #     predicate="merge_key is not null"
-        # )
         ).when_matched_update(
             updates={
                 is_current_col_name: "false",
                 end_time_col_name: f"source.{effective_time_col_name}"
             },
-            predicate=f"target.{is_current_col_name} = true and ({when_matched_column_predicate})"
+            predicate=f"{when_matched_column_predicate}"
         ).execute()
     )
