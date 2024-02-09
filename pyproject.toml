@@ -7,7 +7,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-deltalake = { version = "^0.9", extras = ["pandas"] }
+deltalake = { version = "^0.15", extras = ["pandas"] }
 
 
 [tool.poetry.dev-dependencies]
