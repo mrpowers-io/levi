@@ -1,8 +1,9 @@
 import re
-from typing import Optional
+from typing import Optional, List
 from deltalake import DeltaTable
 import datetime
 import numpy as np
+import pyarrow.compute as pc 
 
 
 def skipped_stats(delta_table, filters):
@@ -109,3 +110,52 @@ def updated_partitions(delta_table: DeltaTable, start_time: Optional[datetime.da
         add_actions_df = add_actions_df[add_actions_df["modification_time"] < np.datetime64(int(end_time.timestamp() * 1e6), "us")]
 
     return add_actions_df.drop_duplicates(subset=["partition_values"])["partition_values"].tolist()
+
+def kill_duplicates(delta_table: DeltaTable, duplication_columns: List[str]):
+    """
+    <description>
+
+    :param delta_table: <description>
+    :type delta_table: DeltaTable
+    :param duplication_columns: <description>
+    :type duplication_columns: List[str]
+
+    :raises TypeError: Raises type error when input arguments have a invalid type or are empty.
+    :raises TypeError: Raises type error when required columns are missing in the provided delta table.
+    """
+
+    if not isinstance(delta_table, DeltaTable):
+        raise TypeError("An existing delta table must be specified.")
+
+    if not duplication_columns or len(duplication_columns) == 0:
+        raise TypeError("Duplication columns must be specified")      
+
+    data_frame = delta_table.to_pyarrow_table()
+
+    # Make sure that all the required columns are present in the provided delta table
+    append_data_columns = data_frame.column_names
+    for required_column in duplication_columns:
+        if required_column not in append_data_columns:
+            raise TypeError(
+                f"The base table has these columns {append_data_columns!r}, but these columns are required {duplication_columns!r}"
+            )
+        
+    data_frame = (
+        data_frame
+        .group_by(duplication_columns)
+        .aggregate([([], "count_all")])
+        .filter(pc.field("count_all") > 1)
+    )
+
+    predicate = " AND ".join([f"source.{column} = target.{column}" for column in duplication_columns])
+
+    (
+        delta_table
+        .merge(
+            source=data_frame,
+            predicate=predicate,
+            source_alias="source",
+            target_alias="target")
+        .when_matched_delete()
+        .execute()
+    )

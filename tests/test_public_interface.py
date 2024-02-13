@@ -4,6 +4,7 @@ import levi
 from deltalake import DeltaTable, write_deltalake
 import pandas as pd
 import random
+import pyarrow as pa
 
 
 def test_skipped_stats():
@@ -151,3 +152,45 @@ def test_updated_partitions_with_time_filter(tmp_path: Path):
     updated_partitions = levi.updated_partitions(delta_table, start_time, end_time)
 
     assert updated_partitions == [{"partition_1": 1, "partition_2": "a"}]
+
+
+def test_kills_duplicates_in_a_delta_table(tmp_path):
+    path = f"{tmp_path}/deduplicate2"
+
+    schema = pa.schema([
+        ("col1", pa.int64()),
+        ("col2", pa.string()),
+        ("col3", pa.string()),
+    ])
+
+    df = pa.Table.from_pydict(
+        {
+            "col1": [1, 2, 3, 4, 5, 6, 9],
+            "col2": ["A", "A", "A", "A", "B", "D", "B"],
+            "col3": ["A", "B", "A", "A", "B", "D", "B"]
+        },
+        schema=schema
+    )
+
+    write_deltalake(path, df)
+
+    delta_table = DeltaTable(path)
+
+    levi.kill_duplicates(delta_table, ["col3", "col2"])
+
+    actual_table = DeltaTable(path).to_pyarrow_table()
+    actual_table_sort_indices = pa.compute.sort_indices(actual_table, sort_keys=[("col1", "ascending"), ("col2", "ascending"), ("col3", "ascending")])
+    actual_table_sorted = actual_table.take(actual_table_sort_indices)
+
+    expected_table = pa.Table.from_pydict(
+        {
+            "col1": [2, 6],
+            "col2": ["A", "D"],
+            "col3": ["B", "D"]
+        },
+        schema=schema   
+    )
+    expected_table_sort_indices = pa.compute.sort_indices(expected_table, sort_keys=[("col1", "ascending"), ("col2", "ascending"), ("col3", "ascending")])
+    expected_table_sorted = expected_table.take(expected_table_sort_indices)
+
+    assert actual_table_sorted == expected_table_sorted
