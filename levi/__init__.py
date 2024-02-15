@@ -161,6 +161,7 @@ def kill_duplicates(delta_table: DeltaTable, duplication_columns: List[str]):
             target_alias="target")
         .when_matched_delete()
         .execute()
+    )
 
 def type_2_scd_upsert(
         delta_table: DeltaTable,
