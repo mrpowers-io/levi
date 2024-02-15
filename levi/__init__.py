@@ -1,8 +1,10 @@
 import re
-from typing import Optional
+from typing import Optional, List
 from deltalake import DeltaTable
 import datetime
 import numpy as np
+import pyarrow as pa
+from pyarrow.interchange.from_dataframe import DataFrameObject
 
 
 def skipped_stats(delta_table, filters):
@@ -109,3 +111,131 @@ def updated_partitions(delta_table: DeltaTable, start_time: Optional[datetime.da
         add_actions_df = add_actions_df[add_actions_df["modification_time"] < np.datetime64(int(end_time.timestamp() * 1e6), "us")]
 
     return add_actions_df.drop_duplicates(subset=["partition_values"])["partition_values"].tolist()
+
+def type_2_scd_upsert(
+        delta_table: DeltaTable,
+        updates_df: DataFrameObject,
+        primary_key: str,
+        attr_col_names: List[str],
+        is_current_col_name: str,
+        effective_time_col_name: str,
+        end_time_col_name: str,
+) -> None:
+    """
+    Upserts SCD2 changed to a DeltaTable.
+    Based off: https://docs.delta.io/latest/delta-update.html#slowly-changing-data-scd-type-2-operation-into-delta-tables
+
+    :param delta_table: DeltaTable
+    :type path: str
+    :param updates_df: Object supporting the interchange protocol, i.e. `__dataframe__` method.
+    :type updates_df: DataFrameObject
+    :param primary_key: <description>
+    :type primary_key: str
+    :param attr_col_names: <description>
+    :type attr_col_names: List[str]
+    :param is_current_col_name: <description>
+    :type is_current_col_name: str
+    :param effective_time_col_name: <description>
+    :type effective_time_col_name: str
+    :param end_time_col_name: <description>
+    :type effective_time_col_name: str
+
+    :raises ValueError: Raises value error when updates data frame object does not support the interchange protocol.
+    :raises TypeError: Raises type error when required column names are not in the base table.
+    :raises TypeError: Raises type error when required column names for updates are not in the attributes columns list.
+
+    :returns: <description>
+    :rtype: None
+    """
+    # only need to compare to current records
+    base_table = delta_table.to_pyarrow_table(
+        filters=[
+            (is_current_col_name,"=", True)
+        ]
+    )
+
+    # validate the existing Delta table
+    base_col_names = base_table.column_names
+    required_base_col_names = (
+        [primary_key]
+        + attr_col_names
+        + [is_current_col_name, effective_time_col_name, end_time_col_name]
+    )
+    if sorted(base_col_names) != sorted(required_base_col_names):
+        raise TypeError(
+            f"The base table has these columns {base_col_names!r}, but these columns are required {required_base_col_names!r}"
+        )
+
+    # validate the updates DataFrame
+    updates_table = pa.interchange.from_dataframe(updates_df)
+    updates_col_names = updates_table.column_names
+    required_updates_col_names = (
+        [primary_key] + attr_col_names + [effective_time_col_name]
+    )
+    if sorted(updates_col_names) != sorted(required_updates_col_names):
+        raise TypeError(
+            f"The updates DataFrame has these columns {updates_col_names!r}, but these columns are required {required_updates_col_names!r}"
+        )
+
+    base_table = base_table.filter(pa.compute.field(is_current_col_name) == True)
+
+    # create not equal or filter expression search for new records
+    for i, col in enumerate(attr_col_names):
+        if i == 0:
+            filter_expression = (pa.compute.field(col) != pa.compute.field(f"{col}_base"))
+        else:
+            filter_expression = filter_expression.__or__((pa.compute.field(col) != pa.compute.field(f"{col}_base")))
+
+    new_records_to_insert_table = updates_table.join(
+        right_table=base_table,
+        keys=primary_key,
+        join_type='inner',
+        right_suffix='_base'
+    ).filter(
+        filter_expression
+    )
+
+    merge_key_data_type = base_table.schema.field(primary_key).type 
+
+    # fill the merge_key column with nulls
+    new_records_to_insert_table = new_records_to_insert_table.append_column(
+        'merge_key', pa.array([None] * new_records_to_insert_table.num_rows, type=merge_key_data_type)
+    )
+
+    # copy primary key into merge_key column for the updates table
+    updates_table = updates_table.append_column('merge_key', updates_table[primary_key])
+
+    # select only the columns required - this drops the joined _base columns
+    new_records_to_insert_table = new_records_to_insert_table.select(
+        updates_table.column_names
+    )
+
+    upsert_table = pa.concat_tables(
+        [
+            updates_table,
+            new_records_to_insert_table,
+        ]
+    )
+
+    (
+        delta_table.merge(
+            source=upsert_table,
+            predicate=f"target.{primary_key} = source.merge_key and target.is_current",
+            source_alias="source",
+            target_alias="target"
+        ).when_not_matched_insert(
+            updates={
+                primary_key: f"source.{primary_key}",
+                **{col: f"source.{col}" for col in attr_col_names},
+                effective_time_col_name: f"source.{effective_time_col_name}", 
+                is_current_col_name: "true",
+                end_time_col_name: "null"
+            },
+        ).when_matched_update(
+            updates={
+                is_current_col_name: "false",
+                end_time_col_name: f"source.{effective_time_col_name}"
+            },
+            predicate=' or '.join([f"source.{col} != target.{col}" for col in attr_col_names])
+        ).execute()
+    )
