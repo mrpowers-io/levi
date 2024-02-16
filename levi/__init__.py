@@ -1,11 +1,12 @@
 import re
-from typing import Optional, List
-from deltalake import DeltaTable
+from typing import Optional, List, Iterable, Dict, Union, Tuple
+from deltalake import DeltaTable, write_deltalake
 import datetime
 import numpy as np
 import pyarrow as pa
 from pyarrow.interchange.from_dataframe import DataFrameObject
-
+import pyarrow.compute as pc 
+import collections
 
 def skipped_stats(delta_table, filters):
     df = delta_table.get_add_actions(flatten=True).to_pandas()
@@ -238,4 +239,134 @@ def type_2_scd_upsert(
             },
             predicate=' or '.join([f"source.{col} != target.{col}" for col in attr_col_names])
         ).execute()
+    )
+
+def drop_duplicates(delta_table: DeltaTable, duplication_columns: Union[List[str],Tuple[str]]) -> None:
+    """
+    <description>
+
+    :param delta_table: <description>
+    :type delta_table: DeltaTable
+    :param duplication_columns: <description>
+    :type duplication_columns: List[str]
+    :param pyarrow_options: <description>
+    :type pyarrow_toption: Dict[str, str]
+
+    :raises TypeError: Raises type error when input arguments have a invalid type, are missing or are empty.
+    
+    :returns: <description>
+    :rtype: None
+    """
+    if not isinstance(delta_table, DeltaTable):
+        raise TypeError("An existing delta table must be specified.")
+
+    if not duplication_columns or len(duplication_columns) == 0 or not isinstance(duplication_columns, Union[List,Tuple]):
+        raise TypeError("`duplication_columns` of type `Union[List[str],Tuple[str]]` must be provided.")
+
+
+    pyarrow_table = delta_table.to_pyarrow_table()
+
+    for required_column in duplication_columns:
+        if required_column not in pyarrow_table.column_names:
+            raise TypeError(
+                f"The base table has these columns {pyarrow_table.column_names!r}, but these columns are required {duplication_columns!r}"
+            )
+    
+    keep_indices = (
+        pyarrow_table
+        .append_column(
+            "deduplication_idx_col",
+            pa.array(range(pyarrow_table.num_rows))
+        )
+        .group_by(
+            duplication_columns
+        )
+        .aggregate([('deduplication_idx_col', 'min')])
+        .column('deduplication_idx_col_min')
+    )
+
+
+    deduped_pyarrow_table = pyarrow_table.take(
+        keep_indices
+    )
+
+    write_deltalake(
+        delta_table,
+        deduped_pyarrow_table,
+        mode="overwrite"
+    )
+
+
+def drop_duplicates_pkey(delta_table: DeltaTable, primary_key: str, duplication_columns: Union[List[str],Tuple[str]]) -> None:
+    """
+    <description>
+
+    :param delta_table: <description>
+    :type delta_table: DeltaTable
+    :param primary_key: <description>
+    :type primary_key: str    
+    :param duplication_columns: <description>
+    :type duplication_columns: Union[List[str],Tuple[str]]
+
+    :raises TypeError: Raises type error when input arguments have a invalid type, are missing or are empty.
+    :raises ValueError: Raises value error if `primary_key` is not unique in base table.
+    
+
+    :returns: <description>
+    :rtype: None
+    """
+    if not isinstance(delta_table, DeltaTable):
+        raise TypeError("An existing delta table must be specified.")
+
+    if not primary_key or not isinstance(primary_key, str):
+        raise TypeError("A unique `primary_key` of type `str` must be specified.")
+
+    if not duplication_columns or len(duplication_columns) == 0 or not isinstance(duplication_columns, Union[List,Tuple]):
+        raise TypeError("`duplication_columns` of type `Union[List[str],Tuple[str]]` must be provided.")
+
+    if primary_key in duplication_columns:
+        raise TypeError("`primary_key` must not be in `duplication_columns`.")
+
+    pyarrow_table = delta_table.to_pyarrow_table()
+
+    # Make sure that all the required columns are present in the provided delta table
+    data_columns = pyarrow_table.column_names
+    required_columns = [primary_key] + duplication_columns
+    for required_column in required_columns:
+        if required_column not in data_columns:
+            raise TypeError(
+                f"The base table has these columns {data_columns!r}, but these columns are required {required_columns!r}"
+            )
+
+    # Make sure the primary key is unique in the delta table
+    if pyarrow_table.num_rows != pc.count_distinct(pyarrow_table[primary_key]).as_py():
+        raise ValueError("The provided primary key is not unique in the delta table!")
+
+    pyarrow_table = pyarrow_table.sort_by(
+        [
+            (primary_key, 'ascending')
+        ]
+    )
+
+    keep_indices = (
+        pyarrow_table
+        .append_column(
+            "deduplication_idx_col",
+            pa.array(range(pyarrow_table.num_rows))
+        )
+        .group_by(
+            duplication_columns
+        )
+        .aggregate([('deduplication_idx_col', 'min')])
+        .column('deduplication_idx_col_min')
+    )
+
+    deduped_pyarrow_table = pyarrow_table.take(
+        keep_indices
+    )
+
+    write_deltalake(
+        delta_table,
+        deduped_pyarrow_table,
+        mode="overwrite"
     )
