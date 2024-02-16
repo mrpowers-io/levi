@@ -123,6 +123,7 @@ def test_updated_partitions_without_time_filter(tmp_path: Path):
 
     assert updated_partitions == [{"partition_1": 1, "partition_2": "a"}, {"partition_1": 2, "partition_2": "b"}]
 
+
 def test_updated_partitions_with_time_filter(tmp_path: Path):
     table_location = tmp_path / "test_table"
 
@@ -153,6 +154,7 @@ def test_updated_partitions_with_time_filter(tmp_path: Path):
     updated_partitions = levi.updated_partitions(delta_table, start_time, end_time)
 
     assert updated_partitions == [{"partition_1": 1, "partition_2": "a"}]
+
 
 def test_type_2_scd_upsert_with_single_attribute(tmp_path: Path):
     path = f"{tmp_path}/tmp/delta-upsert-single_attr"
@@ -223,6 +225,7 @@ def test_type_2_scd_upsert_with_single_attribute(tmp_path: Path):
     sorted_expected_table = expected_table.take(expected_table_sort_indices)
 
     assert sorted_actual_table == sorted_expected_table
+
 
 def test_type_2_scd_upsert_with_multiple_attributes(tmp_path: Path):
     path = f"{tmp_path}/tmp/delta-upsert-single_attr"
@@ -406,7 +409,6 @@ def test_type_2_scd_upsert_errors_out_if_updates_df_does_not_have_all_required_c
         )
 
 
-
 def test_type_2_scd_upsert_does_not_insert_duplicate(tmp_path: Path):
     path = f"{tmp_path}/tmp/delta-upsert-single_attr"
         
@@ -477,7 +479,6 @@ def test_type_2_scd_upsert_does_not_insert_duplicate(tmp_path: Path):
     sorted_expected_table = expected_table.take(expected_table_sort_indices)
 
     assert sorted_actual_table == sorted_expected_table
-
 
 
 def test_type_2_scd_upsert_with_version_number(tmp_path: Path):
@@ -551,7 +552,6 @@ def test_type_2_scd_upsert_with_version_number(tmp_path: Path):
     assert sorted_actual_table == sorted_expected_table
 
 def test_drop_duplicates_one_column(tmp_path):
-
     path = f"{tmp_path}/drop_duplicates1"
 
     schema = pa.schema([
@@ -591,8 +591,8 @@ def test_drop_duplicates_one_column(tmp_path):
         schema=schema
     )
 
-
     assert actual_pyarrow_table == expected_pyarrow_table
+
 
 def test_drop_duplicates_two_columns(tmp_path):
 
@@ -637,6 +637,7 @@ def test_drop_duplicates_two_columns(tmp_path):
 
     assert actual_pyarrow_table == expected_pyarrow_table
 
+
 def test_drop_duplicates_raises_errors(tmp_path):
 
     path = f"{tmp_path}/drop_duplicates2"
@@ -663,7 +664,6 @@ def test_drop_duplicates_raises_errors(tmp_path):
 
     delta_table = DeltaTable(path)
 
-
     with pytest.raises(TypeError):
         levi.drop_duplicates(None, ["col1","col2"])             # No delta_table provided
         levi.drop_duplicates(delta_table, [])                   # Empty duplication_columns provided
@@ -672,9 +672,7 @@ def test_drop_duplicates_raises_errors(tmp_path):
         levi.drop_duplicates(delta_table, "col1")               # Wrong type of duplication_columns
 
 
-
 def test_drop_duplicates_pkey_two_columns_with_sorted_pkey(tmp_path):
-
     path = f"{tmp_path}/drop_duplicates_pkey1"
 
     schema = pa.schema([
@@ -714,9 +712,7 @@ def test_drop_duplicates_pkey_two_columns_with_sorted_pkey(tmp_path):
         schema=schema
     )
 
-
     assert actual_pyarrow_table == expected_pyarrow_table
-
 
 
 def test_drop_duplicates_pkey_two_columns_with_unsorted_pkey(tmp_path):
@@ -762,7 +758,7 @@ def test_drop_duplicates_pkey_two_columns_with_unsorted_pkey(tmp_path):
 
     assert actual_pyarrow_table == expected_pyarrow_table
 
-#TODO:
+
 def test_drop_duplicates_pkey_with_unique_pkey(tmp_path):
 
     path = f"{tmp_path}/drop_duplicates_pkey1"
@@ -808,7 +804,6 @@ def test_drop_duplicates_pkey_with_unique_pkey(tmp_path):
 
 
 def test_drop_duplicates_pkey_without_unique_pkey_raises_error(tmp_path):
-
     path = f"{tmp_path}/drop_duplicates_pkey1"
 
     schema = pa.schema([
@@ -837,8 +832,8 @@ def test_drop_duplicates_pkey_without_unique_pkey_raises_error(tmp_path):
     with pytest.raises(ValueError):
         levi.drop_duplicates_pkey(delta_table, "col1", ["col2", "col3"])
 
-def test_drop_duplicates_pkey_without_unique_pkey_raises_error(tmp_path):
 
+def test_drop_duplicates_pkey_without_unique_pkey_raises_error(tmp_path):
     path = f"{tmp_path}/drop_duplicates_pkey1"
 
     schema = pa.schema([

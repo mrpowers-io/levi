@@ -1,12 +1,12 @@
 import re
-from typing import Optional, List, Iterable, Dict, Union, Tuple
+from typing import Optional, List, Union, Tuple
 from deltalake import DeltaTable, write_deltalake
 import datetime
 import numpy as np
 import pyarrow as pa
 from pyarrow.interchange.from_dataframe import DataFrameObject
 import pyarrow.compute as pc 
-import collections
+
 
 def skipped_stats(delta_table, filters):
     df = delta_table.get_add_actions(flatten=True).to_pandas()
@@ -112,6 +112,7 @@ def updated_partitions(delta_table: DeltaTable, start_time: Optional[datetime.da
         add_actions_df = add_actions_df[add_actions_df["modification_time"] < np.datetime64(int(end_time.timestamp() * 1e6), "us")]
 
     return add_actions_df.drop_duplicates(subset=["partition_values"])["partition_values"].tolist()
+
 
 def type_2_scd_upsert(
         delta_table: DeltaTable,
@@ -240,6 +241,7 @@ def type_2_scd_upsert(
             predicate=' or '.join([f"source.{col} != target.{col}" for col in attr_col_names])
         ).execute()
     )
+
 
 def drop_duplicates(delta_table: DeltaTable, duplication_columns: Union[List[str],Tuple[str]]) -> None:
     """
