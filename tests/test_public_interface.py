@@ -123,6 +123,7 @@ def test_updated_partitions_without_time_filter(tmp_path: Path):
 
     assert updated_partitions == [{"partition_1": 1, "partition_2": "a"}, {"partition_1": 2, "partition_2": "b"}]
 
+
 def test_updated_partitions_with_time_filter(tmp_path: Path):
     table_location = tmp_path / "test_table"
 
@@ -153,6 +154,7 @@ def test_updated_partitions_with_time_filter(tmp_path: Path):
     updated_partitions = levi.updated_partitions(delta_table, start_time, end_time)
 
     assert updated_partitions == [{"partition_1": 1, "partition_2": "a"}]
+
 
 def test_kills_duplicates_in_a_delta_table(tmp_path):
     path = f"{tmp_path}/deduplicate2"
@@ -194,6 +196,7 @@ def test_kills_duplicates_in_a_delta_table(tmp_path):
     expected_table_sorted = expected_table.take(expected_table_sort_indices)
 
     assert actual_table_sorted == expected_table_sorted
+
 
 def test_type_2_scd_upsert_with_single_attribute(tmp_path: Path):
     path = f"{tmp_path}/tmp/delta-upsert-single_attr"
@@ -264,6 +267,7 @@ def test_type_2_scd_upsert_with_single_attribute(tmp_path: Path):
     sorted_expected_table = expected_table.take(expected_table_sort_indices)
 
     assert sorted_actual_table == sorted_expected_table
+
 
 def test_type_2_scd_upsert_with_multiple_attributes(tmp_path: Path):
     path = f"{tmp_path}/tmp/delta-upsert-single_attr"
@@ -447,7 +451,6 @@ def test_type_2_scd_upsert_errors_out_if_updates_df_does_not_have_all_required_c
         )
 
 
-
 def test_type_2_scd_upsert_does_not_insert_duplicate(tmp_path: Path):
     path = f"{tmp_path}/tmp/delta-upsert-single_attr"
         
@@ -520,7 +523,6 @@ def test_type_2_scd_upsert_does_not_insert_duplicate(tmp_path: Path):
     assert sorted_actual_table == sorted_expected_table
 
 
-
 def test_type_2_scd_upsert_with_version_number(tmp_path: Path):
     path = f"{tmp_path}/tmp/delta-upsert-single_attr"
     
@@ -590,4 +592,353 @@ def test_type_2_scd_upsert_with_version_number(tmp_path: Path):
     sorted_expected_table = expected_table.take(expected_table_sort_indices)
 
     assert sorted_actual_table == sorted_expected_table
+
+
+def test_drop_duplicates_one_column(tmp_path):
+    path = f"{tmp_path}/drop_duplicates1"
+
+    schema = pa.schema([
+        ('col1', pa.int64()),
+        ('col2', pa.string()),
+        ('col3', pa.string()),
+        ('col4', pa.string()),
+    ])
+    data = {
+        "col1": [1, 1, 1, 1],
+        "col2": ["A", "A", "A", "A"],
+        "col3": ["A", "A", "A", "A"],
+        "col4": ["C", "C", "C", "C"],
+    }
+
+    pyarrow_table = pa.Table.from_pydict(
+        data,
+        schema=schema
+    )
+
+    write_deltalake(path, pyarrow_table)
+
+    delta_table = DeltaTable(path)
+
+    levi.drop_duplicates(delta_table, ["col1"])
+
+    actual_delta_table = DeltaTable(path)
+    actual_pyarrow_table = actual_delta_table.to_pyarrow_table()
+
+    expected_pyarrow_table = pa.Table.from_pydict(
+        {
+            "col1": [1],
+            "col2": ["A"],
+            "col3": ["A"],
+            "col4": ["C"],
+        },
+        schema=schema
+    )
+
+    assert actual_pyarrow_table == expected_pyarrow_table
+
+
+def test_drop_duplicates_two_columns(tmp_path):
+
+    path = f"{tmp_path}/drop_duplicates2"
+
+    schema = pa.schema([
+        ('col1', pa.int64()),
+        ('col2', pa.string()),
+        ('col3', pa.string()),
+        ('col4', pa.string()),
+    ])
+    data = {
+        "col1": [1, 1, 1, 1],
+        "col2": ["A", "A", "B", "B"],
+        "col3": ["A", "A", "A", "A"],
+        "col4": ["C", "C", "C", "C"],
+    }
+
+    pyarrow_table = pa.Table.from_pydict(
+        data,
+        schema=schema
+    )
+
+    write_deltalake(path, pyarrow_table)
+
+    delta_table = DeltaTable(path)
+
+    levi.drop_duplicates(delta_table, ["col1","col2"])
+
+    actual_delta_table = DeltaTable(path)
+    actual_pyarrow_table = actual_delta_table.to_pyarrow_table()
+
+    expected_pyarrow_table = pa.Table.from_pydict(
+        {
+            "col1": [1,1],
+            "col2": ["A","B"],
+            "col3": ["A","A"],
+            "col4": ["C","C"],
+        },
+        schema=schema
+    )
+
+    assert actual_pyarrow_table == expected_pyarrow_table
+
+
+def test_drop_duplicates_raises_errors(tmp_path):
+
+    path = f"{tmp_path}/drop_duplicates2"
+
+    schema = pa.schema([
+        ('col1', pa.int64()),
+        ('col2', pa.string()),
+        ('col3', pa.string()),
+        ('col4', pa.string()),
+    ])
+    data = {
+        "col1": [1, 1, 1, 1],
+        "col2": ["A", "A", "B", "B"],
+        "col3": ["A", "A", "A", "A"],
+        "col4": ["C", "C", "C", "C"],
+    }
+
+    pyarrow_table = pa.Table.from_pydict(
+        data,
+        schema=schema
+    )
+
+    write_deltalake(path, pyarrow_table)
+
+    delta_table = DeltaTable(path)
+
+    with pytest.raises(TypeError):
+        levi.drop_duplicates(None, ["col1","col2"])             # No delta_table provided
+        levi.drop_duplicates(delta_table, [])                   # Empty duplication_columns provided
+        levi.drop_duplicates(delta_table, None)                 # No duplication_columns provided
+        levi.drop_duplicates(delta_table, ["col1","col5"])      # Non-existing col5 provided
+        levi.drop_duplicates(delta_table, "col1")               # Wrong type of duplication_columns
+
+
+def test_drop_duplicates_pkey_two_columns_with_sorted_pkey(tmp_path):
+    path = f"{tmp_path}/drop_duplicates_pkey1"
+
+    schema = pa.schema([
+        ('col1', pa.int64()),
+        ('col2', pa.string()),
+        ('col3', pa.string()),
+        ('col4', pa.string()),
+    ])
+    data = {
+        "col1": [  1,   2,   3,   4,   5,   6,   9],
+        "col2": ["A", "A", "A", "A", "B", "D", "B"],
+        "col3": ["A", "B", "A", "A", "B", "D", "B"],
+        "col4": ["C", "C", "D", "E", "C", "C", "E"],
+    }
+
+    pyarrow_table = pa.Table.from_pydict(
+        data,
+        schema=schema
+    )
+
+    write_deltalake(path, pyarrow_table)
+
+    delta_table = DeltaTable(path)
+
+    levi.drop_duplicates_pkey(delta_table, "col1", ["col2", "col3"])
+
+    actual_delta_table = DeltaTable(path)
+    actual_pyarrow_table = actual_delta_table.to_pyarrow_table()
+
+    expected_pyarrow_table = pa.Table.from_pydict(
+        {
+            "col1": [1, 2, 5, 6],
+            "col2": ["A", "A", "B", "D"],
+            "col3": ["A", "B", "B", "D"],
+            "col4": ["C", "C", "C", "C"],
+        },
+        schema=schema
+    )
+
+    assert actual_pyarrow_table == expected_pyarrow_table
+
+
+def test_drop_duplicates_pkey_two_columns_with_unsorted_pkey(tmp_path):
+
+    path = f"{tmp_path}/drop_duplicates_pkey1"
+
+    schema = pa.schema([
+        ('col1', pa.int64()),
+        ('col2', pa.string()),
+        ('col3', pa.string()),
+        ('col4', pa.string()),
+    ])
+    data = {
+        "col1": [  4,   2,   3,   1,   9,   6,   5],
+        "col2": ["A", "A", "A", "A", "B", "D", "B"],
+        "col3": ["A", "B", "A", "A", "B", "D", "B"],
+        "col4": ["C", "C", "D", "E", "C", "C", "E"],
+    }
+
+    pyarrow_table = pa.Table.from_pydict(
+        data,
+        schema=schema
+    )
+
+    write_deltalake(path, pyarrow_table)
+
+    delta_table = DeltaTable(path)
+
+    levi.drop_duplicates_pkey(delta_table, "col1", ["col2", "col3"])
+
+    actual_delta_table = DeltaTable(path)
+    actual_pyarrow_table = actual_delta_table.to_pyarrow_table()
+
+    expected_pyarrow_table = pa.Table.from_pydict(
+        {
+            "col1": [1, 2, 5, 6],
+            "col2": ["A", "A", "B", "D"],
+            "col3": ["A", "B", "B", "D"],
+            "col4": ["E", "C", "E", "C"],
+        },
+        schema=schema
+    )
+
+    assert actual_pyarrow_table == expected_pyarrow_table
+
+
+def test_drop_duplicates_pkey_with_unique_pkey(tmp_path):
+
+    path = f"{tmp_path}/drop_duplicates_pkey1"
+
+    schema = pa.schema([
+        ('col1', pa.int64()),
+        ('col2', pa.string()),
+        ('col3', pa.string()),
+        ('col4', pa.string()),
+    ])
+    data = {
+        "col1": [  4,   2,   3,   1,   9,   6,   5],
+        "col2": ["A", "A", "A", "A", "B", "D", "B"],
+        "col3": ["A", "B", "A", "A", "B", "D", "B"],
+        "col4": ["C", "C", "D", "E", "C", "C", "E"],
+    }
+
+    pyarrow_table = pa.Table.from_pydict(
+        data,
+        schema=schema
+    )
+
+    write_deltalake(path, pyarrow_table)
+
+    delta_table = DeltaTable(path)
+
+    levi.drop_duplicates_pkey(delta_table, "col1", ["col2", "col3"])
+
+    actual_delta_table = DeltaTable(path)
+    actual_pyarrow_table = actual_delta_table.to_pyarrow_table()
+
+    expected_pyarrow_table = pa.Table.from_pydict(
+        {
+            "col1": [1, 2, 5, 6],
+            "col2": ["A", "A", "B", "D"],
+            "col3": ["A", "B", "B", "D"],
+            "col4": ["E", "C", "E", "C"],
+        },
+        schema=schema
+    )
+
+    assert actual_pyarrow_table == expected_pyarrow_table    
+
+
+def test_drop_duplicates_pkey_without_unique_pkey_raises_error(tmp_path):
+    path = f"{tmp_path}/drop_duplicates_pkey1"
+
+    schema = pa.schema([
+        ('col1', pa.int64()),
+        ('col2', pa.string()),
+        ('col3', pa.string()),
+        ('col4', pa.string()),
+    ])
+    data = {
+        "col1": [  1,   1,   3,   4,   5,   6,   9],
+        "col2": ["A", "A", "A", "A", "B", "D", "B"],
+        "col3": ["A", "B", "A", "A", "B", "D", "B"],
+        "col4": ["C", "C", "D", "E", "C", "C", "E"],
+    }
+
+    pyarrow_table = pa.Table.from_pydict(
+        data,
+        schema=schema
+    )
+
+    write_deltalake(path, pyarrow_table)
+
+    delta_table = DeltaTable(path)
+
+
+    with pytest.raises(ValueError):
+        levi.drop_duplicates_pkey(delta_table, "col1", ["col2", "col3"])
+
+
+def test_drop_duplicates_pkey_without_unique_pkey_raises_error(tmp_path):
+    path = f"{tmp_path}/drop_duplicates_pkey1"
+
+    schema = pa.schema([
+        ('col1', pa.int64()),
+        ('col2', pa.string()),
+        ('col3', pa.string()),
+        ('col4', pa.string()),
+    ])
+    data = {
+        "col1": [  1,   1,   3,   4,   5,   6,   9],
+        "col2": ["A", "A", "A", "A", "B", "D", "B"],
+        "col3": ["A", "B", "A", "A", "B", "D", "B"],
+        "col4": ["C", "C", "D", "E", "C", "C", "E"],
+    }
+
+    pyarrow_table = pa.Table.from_pydict(
+        data,
+        schema=schema
+    )
+
+    write_deltalake(path, pyarrow_table)
+
+    delta_table = DeltaTable(path)
+
+
+    with pytest.raises(ValueError):
+        levi.drop_duplicates_pkey(delta_table, "col1", ["col2", "col3"])
+
+
+def test_drop_duplicates_pkey_raises_errors(tmp_path):
+
+    path = f"{tmp_path}/drop_duplicates_pkey1"
+
+    schema = pa.schema([
+        ('col1', pa.int64()),
+        ('col2', pa.string()),
+        ('col3', pa.string()),
+        ('col4', pa.string()),
+    ])
+    data = {
+        "col1": [  1,   2,   3,   4,   5,   6,   9],
+        "col2": ["A", "A", "A", "A", "B", "D", "B"],
+        "col3": ["A", "B", "A", "A", "B", "D", "B"],
+        "col4": ["C", "C", "D", "E", "C", "C", "E"],
+    }
+
+    pyarrow_table = pa.Table.from_pydict(
+        data,
+        schema=schema
+    )
+
+    write_deltalake(path, pyarrow_table)
+
+    delta_table = DeltaTable(path)
+
+    with pytest.raises(TypeError):
+        levi.drop_duplicates_pkey(None, "col1", ["col1","col2"])            # No delta_table provided
+        levi.drop_duplicates_pkey(delta_table, None, ["col2", "col3"])      # No pkey provided
+        levi.drop_duplicates_pkey(delta_table, "col1", None)                # No duplication_cols provided
+        levi.drop_duplicates_pkey(delta_table, "col1", [])                  # Empty duplication_cols provided
+        levi.drop_duplicates_pkey(delta_table, "col1", ["col1", "col2"])    # Pkey in duplication_cols provided
+        levi.drop_duplicates_pkey(delta_table, "col1", ["col1", "col4"])    # Non-existing col4 provided
+        levi.drop_duplicates_pkey(delta_table, "col1", "col2")              # Wrong duplication_cols type
+        levi.drop_duplicates_pkey(delta_table, 1, ["col1","col2"])          # Wrong primary_key type provided
 
