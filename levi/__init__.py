@@ -105,7 +105,7 @@ def boundary_parser(boundary):
         raise ValueError(
             f"{boundary} cannot be parsed.  Valid prefixes are <, <=, >, and >=.  Two values can be delimited with a dash.  Valid examples include <10kb and 10kb-5gb.")
 
-def updated_partitions(delta_table: DeltaTable, start_time: Optional[datetime.datetime] = None, end_time: Optional[datetime.datetime] = None) -> dict[str, str]:
+def updated_partitions(delta_table: DeltaTable, start_time: Optional[datetime.datetime] = None, end_time: Optional[datetime.datetime] = None) -> list[dict[str, str]]:
     add_actions_df = delta_table.get_add_actions().to_pandas()
 
     if start_time is not None:
