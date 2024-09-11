@@ -8,7 +8,7 @@ import pyarrow.compute as pc
 import pyarrow as pa
 from pyarrow.interchange.from_dataframe import DataFrameObject
 import pyarrow.compute as pc 
-import hashlib
+from hashlib import md5
 
 def skipped_stats(delta_table, filters):
     df = delta_table.get_add_actions(flatten=True).to_pandas()
@@ -432,14 +432,8 @@ def append_md5_column(delta_table: DeltaTable, cols: List[str]) -> None:
 
     :param delta_table: <description>
     :type delta_table: DeltaTable
-    :param primary_key: <description>
-    :type primary_key: str
-    :param duplication_columns: <description>
-    :type duplication_columns: Union[List[str],Tuple[str]]
-
-    :raises TypeError: Raises type error when input arguments have a invalid type, are missing or are empty.
-    :raises ValueError: Raises value error if `primary_key` is not unique in base table.
-
+    :param cols: <description>
+    :type cols: List[str]
 
     :returns: <description>
     :rtype: None
