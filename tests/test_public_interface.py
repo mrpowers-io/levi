@@ -1048,4 +1048,110 @@ def test_append_md5_generates_expected_hashes_string_string(tmp_path: Path):
     )
 
     assert actual_pyarrow_table == expected_pyarrow_table
-    print('passed')
+
+def test_append_md5_generates_expected_hashes_string_3(tmp_path: Path):
+    path = tmp_path / "append_md5_string_string"
+
+    initial_schema = pa.schema(
+        [
+            ("col1", pa.int64()),
+            ("col2", pa.string()),
+            ("col3", pa.string()),
+            ("col4", pa.string()),
+        ]
+    )
+    expected_schema = pa.schema(
+        [
+            ("col1", pa.int64()),
+            ("col2", pa.string()),
+            ("col3", pa.string()),
+            ("col4", pa.string()),
+            ("md5_col2_col3_col4", pa.string())
+        ]
+    )
+
+    initial_data = {
+        "col1": [1, 2, 3, 4, 5, 6, 9],
+        "col2": ["A", "A", "A", "A", "B", "D", "B"],
+        "col3": ["A", "B", "A", "A", "B", "D", "B"],
+        "col4": ["C", "C", "D", "E", "C", "C", "E"],
+    }
+    
+    n_rows = len(initial_data["col1"])
+    expected_data = initial_data
+    expected_md5_values = []
+    for i in range(n_rows):
+        concat_val = str(initial_data["col2"][i]) + "||" + str(initial_data["col3"][i]) + "||" + str(initial_data['col4'][i])
+        hash_val = hashlib.md5(concat_val.encode("utf-8")).hexdigest()
+        expected_md5_values.append(hash_val)
+
+    expected_data["md5_col2_col3_col4"] = expected_md5_values
+    
+    pyarrow_table = pa.Table.from_pydict(initial_data, schema=initial_schema)
+    write_deltalake(path, pyarrow_table)
+
+    delta_table = DeltaTable(path)
+    levi.append_md5_column(delta_table, ["col2", "col3", "col4"])
+
+    actual_delta_table = DeltaTable(path)
+    actual_pyarrow_table = actual_delta_table.to_pyarrow_table()
+    expected_pyarrow_table = pa.Table.from_pydict(
+        expected_data, 
+        schema=expected_schema,
+    )
+
+    assert actual_pyarrow_table == expected_pyarrow_table
+
+
+def test_append_md5_generates_expected_hashes_string(tmp_path: Path):
+    path = tmp_path / "append_md5_string_string"
+
+    initial_schema = pa.schema(
+        [
+            ("col1", pa.int64()),
+            ("col2", pa.string()),
+            ("col3", pa.string()),
+            ("col4", pa.string()),
+        ]
+    )
+    expected_schema = pa.schema(
+        [
+            ("col1", pa.int64()),
+            ("col2", pa.string()),
+            ("col3", pa.string()),
+            ("col4", pa.string()),
+            ("md5_col2", pa.string())
+        ]
+    )
+
+    initial_data = {
+        "col1": [1, 2, 3, 4, 5, 6, 9],
+        "col2": ["A", "A", "A", "A", "B", "D", "B"],
+        "col3": ["A", "B", "A", "A", "B", "D", "B"],
+        "col4": ["C", "C", "D", "E", "C", "C", "E"],
+    }
+    
+    n_rows = len(initial_data["col1"])
+    expected_data = initial_data
+    expected_md5_values = []
+    for i in range(n_rows):
+        concat_val = str(initial_data["col2"][i])     
+        hash_val = hashlib.md5(concat_val.encode("utf-8")).hexdigest()
+        expected_md5_values.append(hash_val)
+
+    expected_data["md5_col2"] = expected_md5_values
+    
+    pyarrow_table = pa.Table.from_pydict(initial_data, schema=initial_schema)
+    write_deltalake(path, pyarrow_table)
+
+    delta_table = DeltaTable(path)
+    levi.append_md5_column(delta_table, ["col2"])
+
+    actual_delta_table = DeltaTable(path)
+    actual_pyarrow_table = actual_delta_table.to_pyarrow_table()
+    expected_pyarrow_table = pa.Table.from_pydict(
+        expected_data, 
+        schema=expected_schema,
+    )
+
+    assert actual_pyarrow_table == expected_pyarrow_table
