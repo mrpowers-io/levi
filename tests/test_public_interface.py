@@ -1050,7 +1050,7 @@ def test_append_md5_generates_expected_hashes_string_string(tmp_path: Path):
     assert actual_pyarrow_table == expected_pyarrow_table
 
 def test_append_md5_generates_expected_hashes_string_3(tmp_path: Path):
-    path = tmp_path / "append_md5_string_string"
+    path = tmp_path / "append_md5_string3"
 
     initial_schema = pa.schema(
         [
@@ -1104,7 +1104,7 @@ def test_append_md5_generates_expected_hashes_string_3(tmp_path: Path):
 
 
 def test_append_md5_generates_expected_hashes_string(tmp_path: Path):
-    path = tmp_path / "append_md5_string_string"
+    path = tmp_path / "append_md5_string"
 
     initial_schema = pa.schema(
         [
