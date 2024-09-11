@@ -8,7 +8,7 @@ import pyarrow.compute as pc
 import pyarrow as pa
 from pyarrow.interchange.from_dataframe import DataFrameObject
 import pyarrow.compute as pc 
-
+from hashlib import md5
 
 def skipped_stats(delta_table, filters):
     df = delta_table.get_add_actions(flatten=True).to_pandas()
@@ -424,3 +424,34 @@ def drop_duplicates_pkey(delta_table: DeltaTable, primary_key: str, duplication_
         deduped_pyarrow_table,
         mode="overwrite"
     )
+
+
+def append_md5_column(delta_table: DeltaTable, cols: List[str]) -> None:
+    """
+    <description>
+
+    :param delta_table: <description>
+    :type delta_table: DeltaTable
+    :param cols: <description>
+    :type cols: List[str]
+
+    :returns: <description>
+    :rtype: None
+    """
+    col_name = "md5_" + "_".join(cols)
+
+    table = delta_table.to_pyarrow_table()
+    tmp_table = table.append_column(
+        "levi_tmp_concat_col",
+        pc.binary_join_element_wise(  # type: ignore
+            *[pc.cast(table[col], pa.string()) for col in cols],
+            "||",
+        ),
+    )
+    concat_values = tmp_table.select(["levi_tmp_concat_col"]).to_pylist()
+    md5_hash_values = [
+        md5(i["levi_tmp_concat_col"].encode("utf-8")).hexdigest() for i in concat_values
+    ]
+    md5_table = table.append_column(col_name, [md5_hash_values])
+
+    write_deltalake(delta_table, md5_table, mode="overwrite", overwrite_schema=True)
